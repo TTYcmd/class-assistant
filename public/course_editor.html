@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>实验课程安排编辑器</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.9.3/html2pdf.bundle.min.js"></script>
+  <style>
+    section {
+      margin-bottom: 20px;
+    }
+    .editor {
+      border: 1px solid #ccc;
+      padding: 10px;
+      min-height: 150px;
+      overflow-wrap: break-word;
+    }
+    .editor img {
+      max-width: 100%;
+      height: auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>实验课程安排编辑器</h1>
+  <form id="courseForm">
+    <section><h3>教学目的</h3><div id="目的" class="editor" contenteditable="true"></div></section>
+    <section><h3>内容安排</h3><div id="内容" class="editor" contenteditable="true"></div></section>
+    <section><h3>教室安排</h3><div id="教室" class="editor" contenteditable="true"></div></section>
+    <section><h3>教师安排</h3><div id="教师" class="editor" contenteditable="true"></div></section>
+    <section><h3>考核方案</h3><div id="考核" class="editor" contenteditable="true"></div></section>
+    <section><h3>课程资源</h3><div id="资源" class="editor" contenteditable="true"></div></section>
+    <section><h3>实验报告要求</h3><div id="报告" class="editor" contenteditable="true"></div></section>
+    <section><h3>实验室要求</h3><div id="实验室" class="editor" contenteditable="true"></div></section>
+    <section><h3>注意事项</h3><div id="注意" class="editor" contenteditable="true"></div></section>
+    <section><h3>补充</h3><div id="补充" class="editor" contenteditable="true"></div></section>
+
+    <input type="password" id="password" placeholder="请输入上传密码" required>
+    <button type="button" onclick="saveDraft()">保存草稿</button>
+    <button type="button" onclick="uploadToCoze()">上传到知识库</button>
+  </form>
+
+  <script>
+    const sections = ["目的", "内容", "教室", "教师", "考核", "资源", "报告", "实验室", "注意", "补充"];
+
+    function saveDraft() {
+      const draft = {};
+      sections.forEach(id => {
+        draft[id] = document.getElementById(id).innerHTML;
+      });
+      localStorage.setItem("draft", JSON.stringify(draft));
+      alert("已保存草稿");
+    }
+
+    function loadDraft() {
+      const draft = JSON.parse(localStorage.getItem("draft") || "{}");
+      sections.forEach(id => {
+        if (draft[id]) document.getElementById(id).innerHTML = draft[id];
+      });
+    }
+
+    async function uploadToCoze() {
+      const password = document.getElementById("password").value;
+      if (!password) return alert("请输入密码");
+
+      const content = sections.map(id => {
+        return `<h2>${id}</h2>${document.getElementById(id).innerHTML}`;
+      }).join("<div style='page-break-after: always;'></div>");
+
+      const container = document.createElement("div");
+      container.innerHTML = content;
+      container.style.width = "800px";
+      document.body.appendChild(container);
+
+      const opt = { filename: "课程安排.pdf", html2canvas: {}, jsPDF: { format: "a4" } };
+      const pdfBlob = await html2pdf().from(container).set(opt).outputPdf("blob");
+      document.body.removeChild(container);
+
+      const formData = new FormData();
+      formData.append("file", new File([pdfBlob], "the plan.pdf", { type: "application/pdf" }));
+      formData.append("password", password);
+
+      const response = await fetch("/upload", {
+        method: "POST",
+        body: formData
+      });
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "课程安排.pdf";
+        a.click();
+        URL.revokeObjectURL(url);
+        alert("✅ 上传并下载完成");
+      } else {
+        const msg = await response.json();
+        alert("❌ 上传失败：" + msg.message);
+      }
+    }
+
+    window.onload = loadDraft;
+  </script>
+</body>
+</html>
